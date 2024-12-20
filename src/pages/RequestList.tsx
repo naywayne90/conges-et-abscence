@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { AdvancedFilters } from '../components/AdvancedFilters';
 import toast, { Toaster } from 'react-hot-toast';
 import Link from 'next/link';
+import { PriorityBadge } from '../components/PriorityBadge';
 
 interface LeaveRequest {
   id: string;
@@ -18,6 +19,7 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   status: string;
+  priority: string;
   total_days: number;
   created_at: string;
 }
@@ -28,6 +30,7 @@ interface FilterOptions {
   status: string;
   startDate: Date | null;
   endDate: Date | null;
+  priority: string;
 }
 
 export const RequestList: React.FC = () => {
@@ -42,6 +45,7 @@ export const RequestList: React.FC = () => {
     status: '',
     startDate: null,
     endDate: null,
+    priority: '',
   });
   const [sortConfig, setSortConfig] = useState<{
     key: keyof LeaveRequest | 'employee.name' | 'employee.department';
@@ -55,7 +59,7 @@ export const RequestList: React.FC = () => {
 
   const loadRequests = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('leave_requests')
         .select(`
           id,
@@ -63,6 +67,7 @@ export const RequestList: React.FC = () => {
           start_date,
           end_date,
           status,
+          priority,
           total_days,
           created_at,
           employee:employees (
@@ -71,6 +76,33 @@ export const RequestList: React.FC = () => {
             department
           )
         `);
+
+      // Appliquer les filtres
+      if (filterOptions.leaveType) {
+        query = query.eq('type', filterOptions.leaveType);
+      }
+
+      if (filterOptions.department) {
+        query = query.eq('employee.department', filterOptions.department);
+      }
+
+      if (filterOptions.status) {
+        query = query.eq('status', filterOptions.status);
+      }
+
+      if (filterOptions.startDate) {
+        query = query.gte('start_date', filterOptions.startDate.toISOString());
+      }
+
+      if (filterOptions.endDate) {
+        query = query.lte('end_date', filterOptions.endDate.toISOString());
+      }
+
+      if (filterOptions.priority) {
+        query = query.eq('priority', filterOptions.priority);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -155,6 +187,12 @@ export const RequestList: React.FC = () => {
       filtered = filtered.filter(
         (request) =>
           new Date(request.end_date) <= filterOptions.endDate
+      );
+    }
+
+    if (filterOptions.priority) {
+      filtered = filtered.filter(
+        (request) => request.priority === filterOptions.priority
       );
     }
 
@@ -257,9 +295,29 @@ export const RequestList: React.FC = () => {
           options={filterOptions}
           departments={departments}
           leaveTypes={leaveTypes}
-          onChange={setFilterOptions}
+          onChange={(key, value) => setFilterOptions({ ...filterOptions, [key]: value })}
           onClose={() => setShowFilters(false)}
-        />
+        >
+          <div>
+            <label
+              htmlFor="priority"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Priorité
+            </label>
+            <select
+              id="priority"
+              value={filterOptions.priority}
+              onChange={(e) => setFilterOptions({ ...filterOptions, priority: e.target.value })}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">Toutes les priorités</option>
+              <option value="Urgente">Urgente</option>
+              <option value="Normale">Normale</option>
+              <option value="Faible">Faible</option>
+            </select>
+          </div>
+        </AdvancedFilters>
 
         {/* Liste des demandes */}
         <div className="bg-white shadow overflow-hidden rounded-lg">
@@ -311,6 +369,13 @@ export const RequestList: React.FC = () => {
                   </th>
                   <th
                     scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                    onClick={() => handleSort('priority')}
+                  >
+                    Priorité
+                  </th>
+                  <th
+                    scope="col"
                     className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
                     Actions
@@ -320,7 +385,7 @@ export const RequestList: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center">
+                    <td colSpan={8} className="px-6 py-4 text-center">
                       <div className="flex justify-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
                       </div>
@@ -328,7 +393,7 @@ export const RequestList: React.FC = () => {
                   </tr>
                 ) : filteredAndSortedRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
                       Aucune demande trouvée
                     </td>
                   </tr>
@@ -380,6 +445,14 @@ export const RequestList: React.FC = () => {
                         >
                           {getStatusText(request.status)}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <PriorityBadge
+                          priority={request.priority}
+                          requestId={request.id}
+                          canEdit={true}
+                          onUpdate={loadRequests}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Link
