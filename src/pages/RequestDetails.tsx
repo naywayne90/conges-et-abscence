@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { FileViewer } from '../components/FileViewer';
+import { HolidayPeriodInfo } from '../components/HolidayPeriodInfo';
 import { supabase } from '../lib/supabaseClient';
 import { createNotification, sendLeaveRequestEmail } from '../services/notificationService';
 
@@ -167,7 +168,7 @@ export const RequestDetails: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">
             Détails de la Demande
@@ -218,6 +219,46 @@ export const RequestDetails: React.FC = () => {
                     : request.status === 'validee_par_direction'
                     ? 'Validée'
                     : 'Rejetée'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Informations sur la période */}
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-medium mb-4">Période demandée</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Date de début</p>
+                <p className="text-base font-medium">
+                  {format(parseISO(request.start_date), 'EEEE d MMMM yyyy', {
+                    locale: fr,
+                  })}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Date de fin</p>
+                <p className="text-base font-medium">
+                  {format(parseISO(request.end_date), 'EEEE d MMMM yyyy', {
+                    locale: fr,
+                  })}
+                </p>
+              </div>
+            </div>
+            
+            {/* Affichage des jours fériés dans la période */}
+            <HolidayPeriodInfo
+              startDate={request.start_date}
+              endDate={request.end_date}
+            />
+            
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">
+                  Nombre total de jours ouvrables :
+                </span>
+                <span className="text-lg font-bold text-indigo-600">
+                  {request.total_days} jour{request.total_days > 1 ? 's' : ''}
                 </span>
               </div>
             </div>
