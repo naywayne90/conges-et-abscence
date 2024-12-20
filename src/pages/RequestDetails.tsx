@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { FileViewer } from '../components/FileViewer';
 import { HolidayPeriodInfo } from '../components/HolidayPeriodInfo';
+import { AttachmentManager } from '../components/AttachmentManager';
 import { supabase } from '../lib/supabaseClient';
 import { createNotification, sendLeaveRequestEmail } from '../services/notificationService';
 
@@ -425,6 +426,15 @@ export const RequestDetails: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Section des justificatifs */}
+        <div className="mt-8">
+          <AttachmentManager
+            requestId={request.id}
+            canValidate={currentUser?.role === 'direction' || currentUser?.role === 'dgpec'}
+            onUpdate={loadRequest}
+          />
         </div>
       </div>
 
