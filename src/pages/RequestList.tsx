@@ -7,6 +7,8 @@ import { AdvancedFilters } from '../components/AdvancedFilters';
 import toast, { Toaster } from 'react-hot-toast';
 import Link from 'next/link';
 import { PriorityBadge } from '../components/PriorityBadge';
+import { DelayedRequestsAlert } from '../components/DelayedRequestsAlert';
+import { checkDelayedRequests } from '../services/reminderService';
 
 interface LeaveRequest {
   id: string;
@@ -22,6 +24,7 @@ interface LeaveRequest {
   priority: string;
   total_days: number;
   created_at: string;
+  reminder_count: number;
 }
 
 interface FilterOptions {
@@ -57,6 +60,21 @@ export const RequestList: React.FC = () => {
     loadMetadata();
   }, []);
 
+  useEffect(() => {
+    // Vérifier les demandes en retard toutes les 4 heures
+    const checkDelayed = async () => {
+      try {
+        await checkDelayedRequests();
+      } catch (error) {
+        console.error('Erreur lors de la vérification des retards:', error);
+      }
+    };
+
+    checkDelayed();
+    const interval = setInterval(checkDelayed, 4 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadRequests = async () => {
     try {
       let query = supabase
@@ -74,7 +92,8 @@ export const RequestList: React.FC = () => {
             id,
             name,
             department
-          )
+          ),
+          reminder_count
         `);
 
       // Appliquer les filtres
@@ -319,6 +338,9 @@ export const RequestList: React.FC = () => {
           </div>
         </AdvancedFilters>
 
+        {/* Alerte pour les demandes en retard */}
+        <DelayedRequestsAlert />
+
         {/* Liste des demandes */}
         <div className="bg-white shadow overflow-hidden rounded-lg">
           <div className="overflow-x-auto">
@@ -376,6 +398,12 @@ export const RequestList: React.FC = () => {
                   </th>
                   <th
                     scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Statut de Relance
+                  </th>
+                  <th
+                    scope="col"
                     className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
                     Actions
@@ -385,7 +413,7 @@ export const RequestList: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-4 text-center">
+                    <td colSpan={10} className="px-6 py-4 text-center">
                       <div className="flex justify-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
                       </div>
@@ -393,7 +421,7 @@ export const RequestList: React.FC = () => {
                   </tr>
                 ) : filteredAndSortedRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
                       Aucune demande trouvée
                     </td>
                   </tr>
@@ -453,6 +481,14 @@ export const RequestList: React.FC = () => {
                           canEdit={true}
                           onUpdate={loadRequests}
                         />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {request.reminder_count > 0 && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            {request.reminder_count} relance
+                            {request.reminder_count > 1 ? 's' : ''}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <Link

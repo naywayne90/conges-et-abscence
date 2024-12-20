@@ -13,14 +13,28 @@ interface EmailData {
   content: string;
 }
 
-export const sendEmail = async (emailData: EmailData) => {
+export interface EmailParams {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
+export const sendEmail = async (params: EmailParams) => {
   try {
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: JSON.stringify(emailData),
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
     });
 
-    if (error) throw error;
-    return data;
+    if (!response.ok) {
+      throw new Error('Erreur lors de l\'envoi de l\'email');
+    }
+
+    return true;
   } catch (error) {
     console.error('Erreur lors de l\'envoi de l\'email:', error);
     throw error;
@@ -78,7 +92,35 @@ export const sendLeaveRequestNotification = async (
   return sendEmail({
     to: employeeEmail,
     subject,
-    content,
+    text: content,
+  });
+};
+
+export const sendReminderEmail = async (params: EmailParams) => {
+  // Ajouter un style spécifique pour les emails de relance
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 16px; margin-bottom: 24px;">
+        <h2 style="color: #991B1B; margin: 0 0 8px 0;">Relance : Action Requise</h2>
+        <p style="color: #7F1D1D; margin: 0;">Une demande nécessite votre attention</p>
+      </div>
+      
+      <div style="padding: 16px;">
+        ${params.text.split('\n').map(line => `<p style="margin: 8px 0;">${line}</p>`).join('')}
+      </div>
+      
+      <div style="background-color: #F3F4F6; padding: 16px; margin-top: 24px; border-radius: 4px;">
+        <p style="color: #374151; margin: 0; font-size: 14px;">
+          Cet email est envoyé automatiquement par le système de gestion des congés.
+          Merci de ne pas y répondre directement.
+        </p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail({
+    ...params,
+    html: htmlContent,
   });
 };
 
