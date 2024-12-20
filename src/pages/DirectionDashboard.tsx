@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import toast, { Toaster } from 'react-hot-toast';
+import { StatsDashboard } from '../components/StatsDashboard';
 
 interface Notification {
   id: string;
@@ -317,9 +318,9 @@ export const DirectionDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Contenu principal */}
+      {/* Contenu principal avec statistiques */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Ajoutez ici le contenu de votre tableau de bord */}
+        <StatsDashboard />
       </main>
 
       {/* Panneau de notifications */}
