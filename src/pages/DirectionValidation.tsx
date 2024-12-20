@@ -8,6 +8,8 @@ import { fr } from 'date-fns/locale';
 import { LeaveTimeline } from '../components/LeaveTimeline';
 import { NotificationBell } from '../components/NotificationBell';
 import { sendLeaveRequestNotification } from '../services/emailService';
+import { ActionTimeline } from '../components/ActionTimeline';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const DirectionValidation: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -32,15 +34,35 @@ export const DirectionValidation: React.FC = () => {
   });
   const [selectedTimelineEvents, setSelectedTimelineEvents] = useState<TimelineEvent[]>([]);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [selectedActionLogs, setSelectedActionLogs] = useState<ActionLog[]>([]);
+  const [showActionLogs, setShowActionLogs] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
 
   const itemsPerPage = 20;
 
-  // Chargement initial des données
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('id')
+          .eq('email', user.email)
+          .single();
+        
+        if (employee) {
+          setCurrentUserId(employee.id);
+        }
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
   useEffect(() => {
     loadLeaveRequests();
   }, []);
 
-  // Filtrage des demandes
   useEffect(() => {
     let filtered = [...requests];
 
@@ -166,6 +188,59 @@ export const DirectionValidation: React.FC = () => {
       setShowTimeline(true);
     } catch (error) {
       console.error('Erreur lors du chargement de l\'historique:', error);
+    }
+  };
+
+  const loadActionLogs = async (leaveId: string) => {
+    try {
+      const { data: logs, error } = await supabase
+        .from('action_logs')
+        .select(`
+          *,
+          user:user_id (
+            name
+          )
+        `)
+        .eq('leave_request_id', leaveId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedLogs = logs.map(log => ({
+        id: log.id,
+        role: log.role,
+        userName: log.user.name,
+        action: log.action,
+        comment: log.comment,
+        created_at: log.created_at,
+        read_by: log.read_by || []
+      }));
+
+      setSelectedActionLogs(formattedLogs);
+      setShowActionLogs(true);
+    } catch (error) {
+      console.error('Erreur lors du chargement des actions:', error);
+    }
+  };
+
+  const handleMarkAsRead = async (actionId: string) => {
+    try {
+      const { error } = await supabase.rpc('mark_action_as_read', {
+        p_action_id: actionId,
+        p_user_id: currentUserId
+      });
+
+      if (error) throw error;
+
+      setSelectedActionLogs(current =>
+        current.map(log =>
+          log.id === actionId
+            ? { ...log, read_by: [...log.read_by, currentUserId] }
+            : log
+        )
+      );
+    } catch (error) {
+      console.error('Erreur lors du marquage comme lu:', error);
     }
   };
 
@@ -345,6 +420,12 @@ export const DirectionValidation: React.FC = () => {
                   >
                     Historique
                   </button>
+                  <button
+                    onClick={() => loadActionLogs(request.id)}
+                    className="rounded bg-blue-500 px-3 py-1 text-white hover:bg-blue-600"
+                  >
+                    Actions
+                  </button>
                 </td>
               </tr>
             ))}
@@ -408,6 +489,51 @@ export const DirectionValidation: React.FC = () => {
           </Dialog.Panel>
         </div>
       </Dialog>
+
+      {/* Action Logs Dialog */}
+      <AnimatePresence>
+        {showActionLogs && (
+          <Dialog
+            as={motion.div}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            open={showActionLogs}
+            onClose={() => setShowActionLogs(false)}
+            className="relative z-50"
+          >
+            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+            <div className="fixed inset-0 flex items-center justify-center p-4">
+              <Dialog.Panel
+                as={motion.div}
+                initial={{ scale: 0.95 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.95 }}
+                className="mx-auto max-w-3xl rounded-lg bg-white p-6 shadow-xl"
+              >
+                <Dialog.Title className="mb-4 text-lg font-medium">
+                  Historique des Actions
+                </Dialog.Title>
+                <div className="max-h-[60vh] overflow-y-auto">
+                  <ActionTimeline
+                    actions={selectedActionLogs}
+                    currentUserId={currentUserId}
+                    onMarkAsRead={handleMarkAsRead}
+                  />
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    className="rounded bg-gray-200 px-4 py-2 hover:bg-gray-300"
+                    onClick={() => setShowActionLogs(false)}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </div>
+          </Dialog>
+        )}
+      </AnimatePresence>
 
       {/* Dialog de commentaire */}
       <Dialog
