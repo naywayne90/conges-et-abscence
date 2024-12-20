@@ -6,6 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { FileViewer } from '../components/FileViewer';
 import { AttachmentsViewer } from '../components/AttachmentsViewer';
+import { QuotaTable } from '../components/QuotaTable';
+import { QuotaHistory } from '../components/QuotaHistory';
+import { QuotaAdjustmentModal } from '../components/QuotaAdjustmentModal';
 import {
   getDGPECPendingRequests,
   getDGPECValidationHistory,
@@ -14,20 +17,17 @@ import {
   ValidationHistory,
 } from '../services/dgpecService';
 import { getAttachments, downloadAttachment } from '../services/attachmentService';
+import { getQuotas, adjustQuota, getQuotaHistory, QuotaInfo, QuotaHistory as QuotaHistoryType } from '../services/quotaService';
 import { supabase } from '../lib/supabaseClient';
 
 export const DGPECValidation: React.FC = () => {
   const [requests, setRequests] = useState<DGPECRequest[]>([]);
   const [history, setHistory] = useState<ValidationHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState<DGPECRequest | null>(
-    null
-  );
+  const [selectedRequest, setSelectedRequest] = useState<DGPECRequest | null>(null);
   const [validationComment, setValidationComment] = useState('');
   const [showValidationModal, setShowValidationModal] = useState(false);
-  const [validationType, setValidationType] = useState<
-    'validate' | 'reject' | null
-  >(null);
+  const [validationType, setValidationType] = useState<'validate' | 'reject' | null>(null);
   const [newDates, setNewDates] = useState<{
     start: Date | null;
     end: Date | null;
@@ -43,6 +43,14 @@ export const DGPECValidation: React.FC = () => {
     type: string;
   } | null>(null);
   const [attachments, setAttachments] = useState<any[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [quotas, setQuotas] = useState<QuotaInfo[]>([]);
+  const [quotaHistory, setQuotaHistory] = useState<QuotaHistoryType[]>([]);
+  const [selectedQuota, setSelectedQuota] = useState<QuotaInfo | null>(null);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [loadingQuotas, setLoadingQuotas] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -53,6 +61,10 @@ export const DGPECValidation: React.FC = () => {
       loadAttachments(selectedRequest.id);
     }
   }, [selectedRequest]);
+
+  useEffect(() => {
+    loadQuotas();
+  }, [selectedDepartment, selectedCategory]);
 
   const loadAttachments = async (requestId: string) => {
     try {
@@ -96,6 +108,32 @@ export const DGPECValidation: React.FC = () => {
     }
   };
 
+  const loadQuotas = async () => {
+    try {
+      setLoadingQuotas(true);
+      const data = await getQuotas(selectedDepartment, selectedCategory);
+      setQuotas(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des quotas:', error);
+      toast.error('Erreur lors du chargement des quotas');
+    } finally {
+      setLoadingQuotas(false);
+    }
+  };
+
+  const loadQuotaHistory = async (userId: string) => {
+    try {
+      setLoadingHistory(true);
+      const data = await getQuotaHistory(userId);
+      setQuotaHistory(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'historique:', error);
+      toast.error('Erreur lors du chargement de l\'historique');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const handleValidation = async () => {
     if (!selectedRequest || !validationType || !validationComment.trim()) {
       toast.error('Veuillez remplir tous les champs obligatoires');
@@ -129,6 +167,36 @@ export const DGPECValidation: React.FC = () => {
     } catch (error) {
       console.error('Erreur lors de la validation:', error);
       toast.error('Erreur lors de la validation');
+    }
+  };
+
+  const handleQuotaAdjust = async (quota: QuotaInfo) => {
+    setSelectedQuota(quota);
+    await loadQuotaHistory(quota.user_id);
+    setShowQuotaModal(true);
+  };
+
+  const handleQuotaSubmit = async (
+    newTotal: number,
+    newUsed: number,
+    comment: string
+  ) => {
+    if (!selectedQuota) return;
+
+    try {
+      await adjustQuota({
+        user_id: selectedQuota.user_id,
+        quota_total: newTotal,
+        quota_used: newUsed,
+        comment,
+      });
+
+      toast.success('Quota ajusté avec succès');
+      setShowQuotaModal(false);
+      loadQuotas();
+    } catch (error) {
+      console.error('Erreur lors de l\'ajustement du quota:', error);
+      toast.error('Erreur lors de l\'ajustement du quota');
     }
   };
 
@@ -199,6 +267,34 @@ export const DGPECValidation: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Gestion des quotas */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Gestion des Quotas
+          </h2>
+          <QuotaTable
+            quotas={quotas}
+            onAdjust={handleQuotaAdjust}
+            isLoading={loadingQuotas}
+            departments={[]}
+            categories={[]}
+            selectedDepartment={selectedDepartment}
+            selectedCategory={selectedCategory}
+            onDepartmentChange={setSelectedDepartment}
+            onCategoryChange={setSelectedCategory}
+          />
+        </div>
+
+        {/* Historique des quotas */}
+        {quotaHistory.length > 0 && (
+          <div className="mb-8">
+            <QuotaHistory
+              history={quotaHistory}
+              isLoading={loadingHistory}
+            />
+          </div>
+        )}
 
         {/* Liste des demandes */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
@@ -519,6 +615,15 @@ export const DGPECValidation: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal d'ajustement des quotas */}
+      {showQuotaModal && selectedQuota && (
+        <QuotaAdjustmentModal
+          quota={selectedQuota}
+          onClose={() => setShowQuotaModal(false)}
+          onSubmit={handleQuotaSubmit}
+        />
+      )}
 
       {/* Visualiseur de fichiers */}
       <AnimatePresence>
