@@ -10,6 +10,8 @@ import {
 } from '../services/dgValidationService';
 import { WorkingDaysInfo } from '../components/WorkingDaysInfo';
 import { calculateWorkingDays } from '../services/workingDaysService';
+import { getDGStats, DGStats } from '../services/dgStatsService';
+import { StatsCard } from '../components/StatsCard';
 
 export const DGValidation: React.FC = () => {
   const [requests, setRequests] = useState<DGPendingRequest[]>([]);
@@ -23,9 +25,11 @@ export const DGValidation: React.FC = () => {
     null
   );
   const [workingDaysInfo, setWorkingDaysInfo] = useState<any>(null);
+  const [stats, setStats] = useState<DGStats | null>(null);
 
   useEffect(() => {
     loadRequests();
+    loadStats();
   }, []);
 
   useEffect(() => {
@@ -44,6 +48,16 @@ export const DGValidation: React.FC = () => {
       toast.error('Erreur lors du chargement des demandes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await getDGStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques:', error);
+      toast.error('Erreur lors du chargement des statistiques');
     }
   };
 
@@ -105,6 +119,76 @@ export const DGValidation: React.FC = () => {
 
       {/* Contenu principal */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Statistiques */}
+        {stats && (
+          <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <StatsCard
+              title="Demandes Validées"
+              value={stats.approved_requests}
+              description={`Taux d'approbation: ${stats.approval_rate}%`}
+              color="green"
+              icon={
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            />
+            <StatsCard
+              title="Demandes Rejetées"
+              value={stats.rejected_requests}
+              description={`Taux de rejet: ${stats.rejection_rate}%`}
+              color="red"
+              icon={
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            />
+            <StatsCard
+              title="Temps Moyen de Traitement"
+              value={`${stats.average_processing_time_hours.toFixed(1)}h`}
+              description={`${stats.pending_requests} demande(s) en attente`}
+              color="blue"
+              icon={
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              }
+            />
+          </div>
+        )}
+
+        {/* Table des demandes */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
