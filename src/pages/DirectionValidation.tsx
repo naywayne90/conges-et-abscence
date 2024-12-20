@@ -5,6 +5,9 @@ import { AttachmentPreview } from '../components/AttachmentPreview';
 import { Dialog } from '@headlessui/react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { LeaveTimeline } from '../components/LeaveTimeline';
+import { NotificationBell } from '../components/NotificationBell';
+import { sendLeaveRequestNotification } from '../services/emailService';
 
 export const DirectionValidation: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -27,6 +30,8 @@ export const DirectionValidation: React.FC = () => {
       end: '',
     },
   });
+  const [selectedTimelineEvents, setSelectedTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   const itemsPerPage = 20;
 
@@ -88,19 +93,37 @@ export const DirectionValidation: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { data: request, error: requestError } = await supabase
+        .from('leave_requests')
+        .select('*, employee:employees(*)')
+        .eq('id', requestId)
+        .single();
+
+      if (requestError) throw requestError;
+
+      const { error: updateError } = await supabase
         .from('leave_requests')
         .update({
           status: newStatus,
           comments: supabase.sql`array_append(comments, ${JSON.stringify({
             text: comment,
-            author: 'Direction', // À remplacer par l'utilisateur actuel
+            author: 'Direction',
             createdAt: new Date().toISOString(),
           })})`,
         })
         .eq('id', requestId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // Envoi de l'email de notification
+      await sendLeaveRequestNotification(
+        request.employee.email,
+        request.employee.name,
+        newStatus,
+        request.start_date,
+        request.end_date,
+        comment
+      );
 
       await loadLeaveRequests();
       setCommentDialogOpen(false);
@@ -109,7 +132,6 @@ export const DirectionValidation: React.FC = () => {
       setAction(null);
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
-      // Ajouter une notification d'erreur ici
     }
   };
 
@@ -117,6 +139,34 @@ export const DirectionValidation: React.FC = () => {
     setSelectedRequest(request);
     setAction(action);
     setCommentDialogOpen(true);
+  };
+
+  const loadLeaveHistory = async (leaveId: string) => {
+    try {
+      const { data: notifications, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('leave_request_id', leaveId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const events = notifications.map((notification) => ({
+        id: notification.id,
+        date: notification.created_at,
+        type: notification.action_type,
+        user: {
+          name: notification.action_by_name,
+          role: notification.action_by_role,
+        },
+        comment: notification.message,
+      }));
+
+      setSelectedTimelineEvents(events);
+      setShowTimeline(true);
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'historique:', error);
+    }
   };
 
   // Calcul de la pagination
@@ -128,7 +178,10 @@ export const DirectionValidation: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="mb-8 text-3xl font-bold">Validation des Demandes de Congés</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Validation des Demandes de Congés</h1>
+        <NotificationBell />
+      </div>
 
       {/* Filtres */}
       <div className="mb-6 grid grid-cols-1 gap-4 rounded-lg bg-white p-4 shadow-md md:grid-cols-4">
@@ -286,6 +339,12 @@ export const DirectionValidation: React.FC = () => {
                       </button>
                     </div>
                   )}
+                  <button
+                    onClick={() => loadLeaveHistory(request.id)}
+                    className="rounded bg-blue-500 px-3 py-1 text-white hover:bg-blue-600"
+                  >
+                    Historique
+                  </button>
                 </td>
               </tr>
             ))}
@@ -324,6 +383,31 @@ export const DirectionValidation: React.FC = () => {
           onClose={() => setSelectedAttachment(null)}
         />
       )}
+
+      {/* Timeline Dialog */}
+      <Dialog
+        open={showTimeline}
+        onClose={() => setShowTimeline(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto max-w-2xl rounded-lg bg-white p-6">
+            <Dialog.Title className="mb-4 text-lg font-medium">
+              Historique de la demande
+            </Dialog.Title>
+            <LeaveTimeline events={selectedTimelineEvents} />
+            <div className="mt-4 flex justify-end">
+              <button
+                className="rounded bg-gray-200 px-4 py-2"
+                onClick={() => setShowTimeline(false)}
+              >
+                Fermer
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
 
       {/* Dialog de commentaire */}
       <Dialog
