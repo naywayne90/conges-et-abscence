@@ -12,6 +12,8 @@ import { WorkingDaysInfo } from '../components/WorkingDaysInfo';
 import { calculateWorkingDays } from '../services/workingDaysService';
 import { getDGStats, DGStats } from '../services/dgStatsService';
 import { StatsCard } from '../components/StatsCard';
+import { getAttachments, downloadAttachment } from '../services/attachmentService';
+import { AttachmentsViewer } from '../components/AttachmentsViewer';
 
 export const DGValidation: React.FC = () => {
   const [requests, setRequests] = useState<DGPendingRequest[]>([]);
@@ -26,6 +28,7 @@ export const DGValidation: React.FC = () => {
   );
   const [workingDaysInfo, setWorkingDaysInfo] = useState<any>(null);
   const [stats, setStats] = useState<DGStats | null>(null);
+  const [attachments, setAttachments] = useState<any[]>([]);
 
   useEffect(() => {
     loadRequests();
@@ -35,6 +38,7 @@ export const DGValidation: React.FC = () => {
   useEffect(() => {
     if (selectedRequest) {
       calculateDays(selectedRequest);
+      loadAttachments(selectedRequest.id);
     }
   }, [selectedRequest]);
 
@@ -73,6 +77,16 @@ export const DGValidation: React.FC = () => {
     }
   };
 
+  const loadAttachments = async (requestId: string) => {
+    try {
+      const data = await getAttachments(requestId);
+      setAttachments(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des pièces jointes:', error);
+      toast.error('Erreur lors du chargement des pièces jointes');
+    }
+  };
+
   const handleValidation = async () => {
     if (!selectedRequest || !validationType || !comments.trim()) {
       toast.error('Veuillez remplir tous les champs obligatoires');
@@ -103,6 +117,16 @@ export const DGValidation: React.FC = () => {
       toast.error('Erreur lors de la validation');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async (attachment: any) => {
+    try {
+      await downloadAttachment(attachment);
+      toast.success('Téléchargement démarré');
+    } catch (error) {
+      console.error('Erreur lors du téléchargement:', error);
+      toast.error('Erreur lors du téléchargement');
     }
   };
 
@@ -331,7 +355,7 @@ export const DGValidation: React.FC = () => {
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"
+                className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full sm:p-6"
               >
                 <div>
                   <div className="mt-3 text-center sm:mt-5">
@@ -373,6 +397,18 @@ export const DGValidation: React.FC = () => {
                         calculation={workingDaysInfo}
                         className="mb-4"
                       />
+                    )}
+
+                    {attachments.length > 0 && (
+                      <div className="mt-6">
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">
+                          Pièces Justificatives
+                        </h4>
+                        <AttachmentsViewer
+                          attachments={attachments}
+                          onDownload={handleDownload}
+                        />
+                      </div>
                     )}
 
                     <label

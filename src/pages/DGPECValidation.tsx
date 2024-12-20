@@ -5,6 +5,7 @@ import DatePicker from 'react-datepicker';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { FileViewer } from '../components/FileViewer';
+import { AttachmentsViewer } from '../components/AttachmentsViewer';
 import {
   getDGPECPendingRequests,
   getDGPECValidationHistory,
@@ -12,6 +13,7 @@ import {
   DGPECRequest,
   ValidationHistory,
 } from '../services/dgpecService';
+import { getAttachments, downloadAttachment } from '../services/attachmentService';
 import { supabase } from '../lib/supabaseClient';
 
 export const DGPECValidation: React.FC = () => {
@@ -40,10 +42,37 @@ export const DGPECValidation: React.FC = () => {
     url: string;
     type: string;
   } | null>(null);
+  const [attachments, setAttachments] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
   }, [filters]);
+
+  useEffect(() => {
+    if (selectedRequest) {
+      loadAttachments(selectedRequest.id);
+    }
+  }, [selectedRequest]);
+
+  const loadAttachments = async (requestId: string) => {
+    try {
+      const data = await getAttachments(requestId);
+      setAttachments(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des pièces jointes:', error);
+      toast.error('Erreur lors du chargement des pièces jointes');
+    }
+  };
+
+  const handleDownload = async (attachment: any) => {
+    try {
+      await downloadAttachment(attachment);
+      toast.success('Téléchargement démarré');
+    } catch (error) {
+      console.error('Erreur lors du téléchargement:', error);
+      toast.error('Erreur lors du téléchargement');
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -383,7 +412,7 @@ export const DGPECValidation: React.FC = () => {
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"
+                className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full sm:p-6"
               >
                 <div>
                   <div className="mt-3 text-center sm:mt-5">
@@ -451,6 +480,19 @@ export const DGPECValidation: React.FC = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Section des pièces jointes */}
+                  {attachments.length > 0 && (
+                    <div className="mt-6">
+                      <h4 className="text-lg font-medium text-gray-900 mb-4">
+                        Pièces Justificatives
+                      </h4>
+                      <AttachmentsViewer
+                        attachments={attachments}
+                        onDownload={handleDownload}
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
                   <button
